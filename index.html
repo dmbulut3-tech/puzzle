@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Türkçe Yapboz Oyunu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        .puzzle-piece {
+            cursor: grab;
+            transition: transform 0.1s;
+        }
+        .puzzle-piece:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .puzzle-piece.selected {
+            border: 3px solid #f97316; /* orange-500 */
+            transform: scale(0.95);
+        }
+
+        /* Success Animation */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto px-4 py-4 text-center">
+            <h1 class="font-extrabold text-2xl text-slate-900 flex items-center justify-center gap-2">
+                <span class="text-3xl">🧩</span> Eğlenceli Yapboz
+            </h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full max-w-4xl mx-auto p-4 md:p-6 flex flex-col items-center">
+        
+        <!-- MENU SCREEN -->
+        <section id="menu-screen" class="w-full">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">Bir resim seçin</h2>
+                <p class="text-slate-500 mt-2">Oynamak istediğiniz görselin üzerine tıklayın</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6" id="image-grid">
+                <!-- Cards injected via JS -->
+            </div>
+        </section>
+
+        <!-- GAME SCREEN -->
+        <section id="game-screen" class="w-full hidden flex-col items-center">
+            <div class="w-full flex justify-between items-center mb-6">
+                <button onclick="showMenu()" class="bg-white hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition shadow flex items-center gap-2 border border-slate-200">
+                    ← Geri Dön
+                </button>
+                <div class="text-lg font-bold text-slate-700 bg-white px-4 py-2 rounded-xl shadow border border-slate-200">
+                    Hamle: <span id="move-count" class="text-orange-500">0</span>
+                </div>
+            </div>
+
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800" id="current-word">Kelime</h2>
+                <p class="text-slate-500 text-sm mt-1">Yapbozu tamamla! Parçaları sürükle veya tıklayarak yer değiştir.</p>
+            </div>
+
+            <!-- Puzzle Board container -->
+            <div class="bg-white p-3 rounded-2xl shadow-xl border border-slate-200 flex justify-center items-center">
+                <!-- The 3x3 grid -->
+                <div id="puzzle-board" class="grid grid-cols-3 grid-rows-3 gap-1 bg-slate-200 p-1 rounded-xl w-[300px] h-[300px] sm:w-[450px] sm:h-[450px]">
+                    <!-- Pieces injected via JS -->
+                </div>
+            </div>
+            
+            <!-- Reference Image (Hint) -->
+            <div class="mt-8 text-center">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hedef Görsel</p>
+                <img id="reference-image" src="" alt="Hedef" class="w-32 h-32 object-cover rounded-xl shadow-md border-2 border-white mx-auto">
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SUCCESS MODAL -->
+    <div id="success-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-pop-in border-4 border-orange-400">
+            <div class="text-6xl mb-4">🏆</div>
+            <h3 class="text-2xl font-extrabold text-slate-900 mb-2">Tebrikler!</h3>
+            <p class="text-slate-600 font-medium mb-6">Harika bir iş çıkardın! Yapbozu başarıyla tamamladın.</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="playAgain()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition shadow-lg text-lg">
+                    Tekrar Oyna
+                </button>
+                <button onclick="showMenu()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition">
+                    Ana Menüye Dön
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Images Database
+        const images = [
+            { src: 'Снимок экрана 2026-10-28 140329.png', word: 'domates' },
+            { src: 'Снимок экрана 2026-10-28 140343.png', word: 'çikolata' },
+            { src: 'Снимок экрана 2026-10-28 140401.png', word: 'tuz' },
+            { src: 'Снимок экрана 2026-10-28 140411.png', word: 'şeker' },
+            { src: 'Снимок экрана 2026-10-28 140424.png', word: 'peynir' }
+        ];
+
+        // Game State
+        const GRID_SIZE = 3;
+        const TOTAL_PIECES = GRID_SIZE * GRID_SIZE; // 9
+        let currentImageIndex = 0;
+        let pieces = []; // Array of objects { currentPos, correctPos }
+        let moveCount = 0;
+        
+        let draggedPieceIndex = null;
+        let clickedPieceIndex = null;
+
+        // Init Menu
+        function initMenu() {
+            const grid = document.getElementById('image-grid');
+            grid.innerHTML = '';
+            
+            images.forEach((img, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-2xl p-4 shadow hover:shadow-lg transition cursor-pointer border border-slate-100 group';
+                card.onclick = () => startGame(index);
+                card.innerHTML = `
+                    <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 mb-4">
+                        <img src="${img.src}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" alt="${img.word}">
+                    </div>
+                    <div class="text-center font-bold text-lg text-slate-800 capitalize">${img.word}</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Screen Management
+        function showMenu() {
+            document.getElementById('menu-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('success-modal').classList.add('hidden');
+        }
+
+        function showGame() {
+            document.getElementById('menu-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('flex');
+            document.getElementById('success-modal').classList.add('hidden');
+        }
+
+        function startGame(index) {
+            currentImageIndex = index;
+            moveCount = 0;
+            clickedPieceIndex = null;
+            updateMoveCount();
+            
+            const currentImg = images[currentImageIndex];
+            document.getElementById('current-word').innerText = currentImg.word.toUpperCase();
+            document.getElementById('reference-image').src = currentImg.src;
+
+            initPuzzle();
+            showGame();
+        }
+
+        function playAgain() {
+            startGame(currentImageIndex);
+        }
+
+        function updateMoveCount() {
+            document.getElementById('move-count').innerText = moveCount;
+        }
+
+        // Puzzle Logic
+        function initPuzzle() {
+            pieces = [];
+            for (let i = 0; i < TOTAL_PIECES; i++) {
+                pieces.push(i);
+            }
+            
+            // Scramble array until it's not solved initially
+            do {
+                pieces.sort(() => Math.random() - 0.5);
+            } while (checkWin(false));
+
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('puzzle-board');
+            board.innerHTML = '';
+            const currentImgSrc = images[currentImageIndex].src;
+
+            pieces.forEach((correctPieceIndex, currentBoardPosition) => {
+                const pieceDiv = document.createElement('div');
+                pieceDiv.className = 'puzzle-piece bg-white rounded shadow-sm w-full h-full relative overflow-hidden';
+                
+                // Calculate correct background position based on the original index
+                const row = Math.floor(correctPieceIndex / GRID_SIZE);
+                const col = correctPieceIndex % GRID_SIZE;
+                
+                // 3x3 grid means background size is 300%
+                pieceDiv.style.backgroundImage = `url('${currentImgSrc}')`;
+                pieceDiv.style.backgroundSize = `${GRID_SIZE * 100}% ${GRID_SIZE * 100}%`;
+                pieceDiv.style.backgroundPosition = `${col * 50}% ${row * 50}%`;
+                
+                // Drag & Drop events
+                pieceDiv.draggable = true;
+                pieceDiv.ondragstart = (e) => handleDragStart(e, currentBoardPosition);
+                pieceDiv.ondragover = (e) => e.preventDefault();
+                pieceDiv.ondrop = (e) => handleDrop(e, currentBoardPosition);
+
+                // Click event for accessibility/mobile
+                pieceDiv.onclick = () => handleClick(currentBoardPosition);
+
+                if (clickedPieceIndex === currentBoardPosition) {
+                    pieceDiv.classList.add('selected');
+                }
+
+                board.appendChild(pieceDiv);
+            });
+        }
+
+        // Drag and Drop Handlers
+        function handleDragStart(e, position) {
+            draggedPieceIndex = position;
+            clickedPieceIndex = null; // reset click selection if user drags
+            renderBoard(); 
+        }
+
+        function handleDrop(e, targetPosition) {
+            e.preventDefault();
+            if (draggedPieceIndex !== null && draggedPieceIndex !== targetPosition) {
+                swapPieces(draggedPieceIndex, targetPosition);
+            }
+            draggedPieceIndex = null;
+        }
+
+        // Click Swap Handlers
+        function handleClick(position) {
+            if (clickedPieceIndex === null) {
+                // Select first piece
+                clickedPieceIndex = position;
+                renderBoard();
+            } else {
+                // Swap with second piece
+                if (clickedPieceIndex !== position) {
+                    swapPieces(clickedPieceIndex, position);
+                }
+                clickedPieceIndex = null; // deselect
+                renderBoard();
+            }
+        }
+
+        function swapPieces(pos1, pos2) {
+            // Swap values in the array
+            const temp = pieces[pos1];
+            pieces[pos1] = pieces[pos2];
+            pieces[pos2] = temp;
+            
+            moveCount++;
+            updateMoveCount();
+            renderBoard();
+            
+            // Allow DOM to update before checking win
+            setTimeout(() => checkWin(true), 100);
+        }
+
+        function checkWin(showModal) {
+            for (let i = 0; i < TOTAL_PIECES; i++) {
+                if (pieces[i] !== i) {
+                    return false;
+                }
+            }
+            
+            if (showModal) {
+                document.getElementById('success-modal').classList.remove('hidden');
+            }
+            return true;
+        }
+
+        // Start App
+        window.onload = () => {
+            initMenu();
+        };
+
+    </script>
+</body>
+</html>
